@@ -25,6 +25,20 @@ def split_into_chunks(text):
     return chunks
 
 
+def split_into_fixed_chunks(text, chunk_size=800, overlap=100):
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        start += chunk_size - overlap
+
+    return chunks
+
+
 def search(chunks, keyword):
     results = []
     keyword_lower = keyword.lower()
@@ -67,8 +81,9 @@ def semantic_search(model, chunks, chunk_embeddings, question, top_n=3):
 def generate_answer(client, question, top_chunks):
     context_text = "\n\n".join(chunk_text for score, index, chunk_text in top_chunks)
 
-    prompt = f"""Answer the question using ONLY the context below.
-If the answer is not in the context, say "I don't have enough information to answer that."
+    prompt = f"""You are a helpful, knowledgeable assistant. Answer the question naturally and conversationally, as if you're explaining it to someone directly.
+
+Base your answer on the context provided below. If the context doesn't contain enough information to answer confidently, say so naturally (e.g. "I couldn't find that in the document") instead of a robotic disclaimer.
 
 Context:
 {context_text}
