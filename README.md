@@ -1,61 +1,51 @@
-# 📄 DocGenie
+# DocGenie
 
-Chat with your documents. Upload a PDF or text file, ask questions in plain
-English, and get answers grounded **only** in the content of your own file —
-powered by a local embedding model + Google Gemini, using a RAG
-(Retrieval-Augmented Generation) pipeline.
+DocGenie is a document question answering app. You upload a PDF or text file, ask a question about it in plain English, and it gives you an answer based only on what is in your file.
+
+It uses RAG (Retrieval Augmented Generation). The document is not sent to the LLM in full. Instead, relevant parts are found first using a local embedding model, and only those parts are sent to Gemini to generate the answer.
 
 ## How it works
 
-```
-Upload ──► Extract text (PyMuPDF) ──► Chunk (800 chars, 100 overlap)
-                                              │
-                                              ▼
-                              Embed chunks (all-MiniLM-L6-v2, local)
-                                              │
-Ask question ──► Embed question ──► Cosine similarity ──► Top-3 chunks
-                                                              │
-                                                              ▼
-                                              Gemini (grounded prompt) ──► Streamed answer
-```
+1. Text is extracted from the uploaded PDF or txt file.
+2. The text is split into chunks of about 800 characters with 100 characters of overlap between chunks.
+3. Each chunk is converted into an embedding using `all-MiniLM-L6-v2`. This runs locally on your machine.
+4. When you ask a question, the question is embedded the same way and compared with every chunk using cosine similarity. The top 3 chunks are picked.
+5. Those 3 chunks are put into a prompt along with your question and sent to Gemini. The answer is streamed back as it is generated.
 
-1. **Extract** — text is pulled from the PDF/txt file.
-2. **Chunk** — text is split into overlapping ~800-character chunks (snapped
-   to word boundaries so words aren't cut in half).
-3. **Embed** — chunks are embedded locally with `all-MiniLM-L6-v2`
-   (no data leaves your machine at this stage).
-4. **Retrieve** — your question is embedded and cosine similarity picks the
-   3 most relevant chunks.
-5. **Generate** — the chunks are injected into a prompt for Gemini, and the
-   answer streams back token-by-token.
+```
+PDF/txt -> extract text -> chunk -> embed (local model)
+                                        |
+question -> embed -> cosine similarity -> top 3 chunks
+                                        |
+                                        v
+                            Gemini -> streamed answer
+```
 
 ## Setup
 
-```bash
+```
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project folder with your Gemini API key:
 
 ```
 GEMINI_API_KEY=your_key_here
 ```
 
-Get a free key at https://aistudio.google.com/apikey
+You can get a free key from https://aistudio.google.com/apikey
 
 ## Run
 
-```bash
+```
 streamlit run app.py
 ```
 
-## Performance notes
+## Performance details
 
-- The embedding model, and each document's extraction + embeddings, are
-  cached (`@st.cache_resource`) — re-uploading the same file or interacting
-  with widgets never recomputes them.
-- Answers are memoized per (file, question) in `session_state`, so widget
-  interactions (like expanding the sources panel) don't fire duplicate
-  Gemini API calls.
-- Responses stream from Gemini, so you start reading immediately instead of
-  waiting for the full completion.
+A few things I had to fix while building this, since Streamlit reruns the whole script on every interaction:
+
+- The embedding model and document embeddings are cached with `@st.cache_resource`, so uploading the same file twice does not recompute anything.
+- Answers are stored in `st.session_state`, so clicking around the page (like opening the sources panel) does not send the same question to Gemini again.
+- Answers stream in token by token instead of waiting for the full response.
+- Chunk boundaries snap to spaces so words are not cut in half, since cut up words make worse embeddings.
